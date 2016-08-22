@@ -43,6 +43,7 @@ nohup ./mongodb-mms-automation-agent --config=local.config >> /var/log/mongodb-m
 
 import sys
 import os
+import urllib2
 
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
@@ -63,6 +64,32 @@ class CLIError(Exception):
     def __unicode__(self):
         return self.msg
 
+def download( remote, localPath=None  ):
+    # https://cloud.mongodb.com/download/agent/automation/mongodb-mms-automation-agent-2.8.1.1725-1.osx_x86_64.tar.gz
+
+    if localPath is None :
+        ( _, localPath ) = os.path.split( remote )
+        
+    # Open the url
+    try:
+        f = urllib2.urlopen( remote )
+
+        # Open our local file for writing
+        with open( localPath, "wb") as local_file:
+            local_file.write(f.read())
+
+    #handle errors
+    except urllib2.URLError,e :
+        print( "URLError opening: '%s' ($s)" % ( remote, e.reason ))
+        sys.exit( 1 )
+    except urllib2.HTTPError,e :
+        print( "HTTPError opening: '%s' ($s)" % ( remote, e.code ))
+        sys.exit( 1 )
+        
+    return localPath
+  
+    
+    
 def main(argv=None): # IGNORE:C0111
     '''Command line options.'''
 
@@ -70,6 +97,8 @@ def main(argv=None): # IGNORE:C0111
         argv = sys.argv
     else:
         sys.argv.extend(argv)
+        
+    
 
     program_name = os.path.basename(sys.argv[0])
     program_version = "v%s" % __version__
@@ -88,54 +117,41 @@ def main(argv=None): # IGNORE:C0111
 USAGE
 ''' % (program_shortdesc )
 
+
+    defaultAgentURL = "https://cloud.mongodb.com/download/agent/automation/mongodb-mms-automation-agent-2.8.1.1725-1.osx_x86_64.tar.gz"
     try:
         # Setup argument parser
         parser = ArgumentParser(description=program_license, formatter_class=RawDescriptionHelpFormatter)
-        parser.add_argument("-r", "--recursive", dest="recurse", action="store_true", help="recurse into subfolders [default: %(default)s]")
-        parser.add_argument("-v", "--verbose", dest="verbose", action="count", help="set verbosity level [default: %(default)s]")
-        parser.add_argument("-i", "--include", dest="include", help="only include paths matching this regex pattern. Note: exclude is given preference over include. [default: %(default)s]", metavar="RE" )
-        parser.add_argument("-e", "--exclude", dest="exclude", help="exclude paths matching this regex pattern. [default: %(default)s]", metavar="RE" )
+        parser.add_argument("-v", "--verbose", dest="verbose", default='v', action="count", help="set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
-        parser.add_argument(dest="paths", help="paths to folder(s) with source file(s) [default: %(default)s]", metavar="path", nargs='+')
+        parser.add_argument('--download', default=defaultAgentURL, help="Remote URL for agent  location [ default: %(default)s ]")
+        parser.add_argument('--localpath', default=None, help="default local path for download")
+        #parser.add_argument(dest="paths", help="paths to folder(s) with source file(s) [default: %(default)s]", metavar="path", nargs='+')
 
         # Process arguments
         args = parser.parse_args()
 
-        paths = args.paths
         verbose = args.verbose
-        recurse = args.recurse
-        inpat = args.include
-        expat = args.exclude
 
         if verbose > 0:
             print("Verbose mode on")
-            if recurse:
-                print("Recursive mode on")
-            else:
-                print("Recursive mode off")
+            
+        if args.download :
+            localPath = download( args.download )
+            if args.verbose :
+                print( "Downloaded: '%s' to '%s'" % ( args.download, localPath ))
 
-        if inpat and expat and inpat == expat:
-            raise CLIError("include and exclude pattern are equal! Nothing will be processed.")
-
-        for inpath in paths:
-            ### do something with inpath ###
-            print(inpath)
         return 0
     except KeyboardInterrupt:
         ### handle keyboard interrupt ###
         return 0
-    except Exception, e:
-        if DEBUG :
-            raise(e)
-        indent = len(program_name) * " "
-        sys.stderr.write(program_name + ": " + repr(e) + "\n")
-        sys.stderr.write(indent + "  for help use --help")
-        return 2
+#     except Exception, e:
+#         raise( e )
+#         indent = len(program_name) * " "
+#         sys.stderr.write(program_name + ": " + repr(e) + "\n")
+#         sys.stderr.write(indent + "  for help use --help")
+#         return 2
 
 if __name__ == "__main__":
-    if DEBUG:
-        sys.argv.append("-h")
-        sys.argv.append("-v")
-        sys.argv.append("-r")
 
     sys.exit(main())
